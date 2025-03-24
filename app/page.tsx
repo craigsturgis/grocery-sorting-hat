@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import CategoryManager from "./components/CategoryManager";
 import GroceryParser from "./components/GroceryParser";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type ActiveTab = "parser" | "categories" | "receipts";
 
@@ -18,9 +19,18 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
-          Grocery Sorting Hat
-        </h1>
+        <div className="flex flex-col items-center justify-center mb-8 logo-container">
+          <Image
+            src="/sorting-hat-logo.svg"
+            alt="Grocery Sorting Hat Logo"
+            width={120}
+            height={120}
+            className="mb-2"
+          />
+          <h1 className="text-3xl font-bold text-gray-900 text-center">
+            Grocery Sorting Hat
+          </h1>
+        </div>
 
         {/* Tab navigation */}
         <div className="border-b border-gray-200 mb-6">

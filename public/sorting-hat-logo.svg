@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Witch Hat -->
+  <path d="M100 15L40 120H160L100 15Z" fill="#3B2121"/>
+  
+  <!-- Hat Brim -->
+  <path d="M30 120C30 120 50 130 100 130C150 130 170 120 170 120C170 120 160 140 100 140C40 140 30 120 30 120Z" fill="#663931"/>
+  
+  <!-- Hat Texture -->
+  <path d="M80 40L90 60" stroke="#4A2D18" stroke-width="2" stroke-linecap="round"/>
+  <path d="M110 40L100 60" stroke="#4A2D18" stroke-width="2" stroke-linecap="round"/>
+  <path d="M70 65L85 80" stroke="#4A2D18" stroke-width="2" stroke-linecap="round"/>
+  <path d="M130 65L115 80" stroke="#4A2D18" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Hat Face -->
+  <ellipse cx="90" cy="110" rx="5" ry="8" fill="white"/>
+  <ellipse cx="110" cy="110" rx="5" ry="8" fill="white"/>
+  <ellipse cx="90" cy="110" rx="2" ry="4" fill="black"/>
+  <ellipse cx="110" cy="110" rx="2" ry="4" fill="black"/>
+  <path d="M85 130C85 130 95 140 115 130" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Grocery Items -->
+  <circle cx="40" cy="150" r="10" fill="#FF6B6B"/>  <!-- Apple -->
+  <path d="M40 140L38 132" stroke="#4CAF50" stroke-width="2"/>  <!-- Apple stem -->
+  
+  <rect x="150" y="145" width="15" height="20" rx="2" fill="#FFC107"/>  <!-- Carton -->
+  <path d="M150 150H165" stroke="#E65100" stroke-width="1"/>  <!-- Carton line -->
+  
+  <ellipse cx="60" cy="160" rx="12" ry="8" fill="#8D6E63"/>  <!-- Bread -->
+  
+  <ellipse cx="140" cy="165" rx="8" ry="5" fill="#4CAF50"/>  <!-- Lettuce -->
+</svg> 
