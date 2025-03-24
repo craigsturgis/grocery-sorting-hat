@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Grocery Sorting Hat
+
+A web application that helps categorize and analyze your grocery expenses. The app allows you to paste in grocery lists from various stores, categorize items, and see a breakdown of expenses by category.
+
+## Features
+
+- Parse grocery lists from Walmart, Kroger, and Target
+- Manage custom categories for your groceries
+- Automatic categorization of previously categorized items
+- View detailed receipt summaries with category breakdown
+- Track spending across categories
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18.x or higher
+- npm or yarn
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Start the development server:
 
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Manage Categories**: First, create categories for your groceries (e.g., Produce, Dairy, Meat, etc.)
+2. **Parse Grocery Lists**: Paste your grocery list from a supported retailer and submit
+3. **Categorize Items**: Assign categories to new items that haven't been categorized before
+4. **View Summaries**: See how much you're spending in each category
 
-## Learn More
+### Data Format
 
-To learn more about Next.js, take a look at the following resources:
+The application expects grocery lists in a format similar to:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+Item Name $Price
+Another Item $Price
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Technical Details
 
-## Deploy on Vercel
+- Built with Next.js and React
+- Uses SQLite for data storage
+- Tailwind CSS for styling
+- TypeScript for type safety
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
