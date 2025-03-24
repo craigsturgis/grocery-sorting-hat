@@ -28,14 +28,14 @@ interface UncategorizedTotal {
 // GET a single receipt with all items and categories
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   // Initialize the database before processing the request
   await setupServer();
 
   try {
-    // Access id - properly await the params promise
-    const { id } = await params;
+    // Access id from the context parameter - correct way to access params
+    const id = context.params.id;
 
     if (!id) {
       return NextResponse.json(

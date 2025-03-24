@@ -96,6 +96,7 @@ function ReceiptList() {
 
   // Format price as currency
   const formatPrice = (price: number) => {
+    if (typeof price !== "number") return "$0.00";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
@@ -104,11 +105,16 @@ function ReceiptList() {
 
   // Format date
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    if (!dateString) return "";
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   // Fetch all receipts
@@ -210,14 +216,16 @@ function ReceiptList() {
                   #{receipt.id}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {receipt.source.charAt(0).toUpperCase() +
-                    receipt.source.slice(1)}
+                  {receipt.source
+                    ? receipt.source.charAt(0).toUpperCase() +
+                      receipt.source.slice(1)
+                    : "Unknown"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {formatDate(receipt.date)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                  {receipt.total_items}
+                  {receipt.total_items || 0}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
                   {formatPrice(receipt.total_amount)}

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import db from "../../../lib/db";
+import { setupServer } from "../../../lib/serverSetup";
 
 // GET all receipts
 export async function GET() {
+  // Initialize the database before processing the request
+  await setupServer();
+
   try {
     const receipts = db
       .prepare(
