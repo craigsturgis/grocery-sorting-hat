@@ -10,8 +10,10 @@ function parseGroceryList(
   // Different parsing strategies based on store
   if (source === "kroger") {
     return parseKrogerGroceryList(text);
+  } else if (source === "walmart") {
+    return parseWalmartGroceryList(text);
   } else {
-    // Generic parser for other stores (Walmart, Target, etc.)
+    // Generic parser for other stores (Target, etc.)
     return parseGenericGroceryList(text);
   }
 }
@@ -164,6 +166,159 @@ function parseKrogerGroceryList(
   return items;
 }
 
+// Parser for Walmart format
+function parseWalmartGroceryList(
+  text: string
+): { name: string; price: number }[] {
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  const items: { name: string; price: number }[] = [];
+
+  let currentItem: { name: string; price: number | null } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Skip "Shopped" header and cart/review button lines
+    if (
+      line === "Shopped" ||
+      line === "Add to cart" ||
+      line === "Review item" ||
+      line === ""
+    ) {
+      continue;
+    }
+
+    // Skip Walmart Cash line
+    if (line.includes("Walmart Cash")) {
+      continue;
+    }
+
+    // Handle standard price line (standalone price)
+    if (line.match(/^\$\d+\.\d+$/)) {
+      const priceMatch = line.match(/\$(\d+\.\d+)/);
+
+      if (priceMatch && currentItem) {
+        currentItem.price = parseFloat(priceMatch[1]);
+
+        // Add the current item to our list and reset
+        items.push({
+          name: currentItem.name,
+          price: currentItem.price,
+        });
+        currentItem = null;
+      }
+      continue;
+    }
+
+    // Handle per lb price format (e.g., "$5.75/lb")
+    if (line.match(/\$\d+\.\d+\/lb/)) {
+      // This is a unit price line, not the total price
+      continue;
+    }
+
+    // Handle "Discount price $X.XX" format
+    if (line.match(/Discount price \$\d+\.\d+/)) {
+      const priceMatch = line.match(/\$(\d+\.\d+)/);
+      if (priceMatch && currentItem) {
+        currentItem.price = parseFloat(priceMatch[1]);
+
+        // Skip the next "Was $X.XX" line
+        if (i + 1 < lines.length && lines[i + 1].match(/Was \$\d+\.\d+/)) {
+          i++;
+        }
+
+        // Skip any additional price line
+        if (i + 1 < lines.length && lines[i + 1].match(/^\$\d+\.\d+$/)) {
+          i++;
+        }
+
+        // Add item and reset
+        items.push({
+          name: currentItem.name,
+          price: currentItem.price,
+        });
+        currentItem = null;
+      }
+      continue;
+    }
+
+    // Handle savings line and skip it
+    if (line.match(/\$\d+\.\d+\s+from savings/)) {
+      continue;
+    }
+
+    // Handle price with "Was" format
+    if (
+      line.match(/\$\d+\.\d+\s+Was \$\d+\.\d+/) ||
+      line.match(/Was \$\d+\.\d+/) ||
+      line.match(/\$\d+\.\d+$/)
+    ) {
+      // Get the first price mentioned (current price, not "Was" price)
+      const priceMatch = line.match(/\$(\d+\.\d+)/);
+      if (priceMatch && currentItem) {
+        currentItem.price = parseFloat(priceMatch[1]);
+
+        // Add the current item to our list and reset
+        items.push({
+          name: currentItem.name,
+          price: currentItem.price,
+        });
+        currentItem = null;
+      }
+      continue;
+    }
+
+    // Handle multiple items with individual prices (e.g., "Qty 2 $8.28 $4.14 ea")
+    if (line.match(/Qty \d+\s+\$\d+\.\d+/)) {
+      const priceMatch = line.match(/\$(\d+\.\d+)/);
+
+      if (priceMatch && currentItem) {
+        // Use the total price, not the individual price
+        currentItem.price = parseFloat(priceMatch[1]);
+
+        // Add the current item to our list and reset
+        items.push({
+          name: currentItem.name,
+          price: currentItem.price,
+        });
+        currentItem = null;
+      }
+      continue;
+    }
+
+    // Skip quantity, multipack, count, and unit price lines
+    if (
+      line.match(/^Qty \d+$/) ||
+      line.match(/^Multipack Quantity: \d+$/) ||
+      line.match(/^Count: \d+$/) ||
+      line.match(/^Count Per Pack: \d+$/) ||
+      line.match(/^\d+\.\d+¢\/[a-z]+$/) ||
+      line.match(/\$\d+\.\d+\/[a-z]+/) ||
+      line.match(/\$\d+\.\d+ ea/)
+    ) {
+      continue;
+    }
+
+    // If we have any line that doesn't match above patterns and isn't a price, it's likely a product name
+    if (!line.match(/\$\d+\.\d+/) && !currentItem) {
+      currentItem = {
+        name: line,
+        price: null,
+      };
+    }
+  }
+
+  // Don't forget to add the last item if it exists
+  if (currentItem && currentItem.price !== null) {
+    items.push({
+      name: currentItem.name,
+      price: currentItem.price,
+    });
+  }
+
+  return items;
+}
+
 // Generic parser for simple "Item $Price" format
 function parseGenericGroceryList(
   text: string
@@ -275,7 +430,7 @@ export async function POST(request: Request) {
           // Use existing item
           const itemId = existingItem.id;
 
-          // Add to receipt items
+          // Add to receipt items - explicitly use existingItem.taxable to ensure it persists
           insertReceiptItem.run(receiptId, itemId, price, existingItem.taxable);
 
           // Add to result
@@ -298,7 +453,7 @@ export async function POST(request: Request) {
             });
           }
         } else {
-          // Create new item without category
+          // Create new item without category, with default taxable set to 0 (false)
           const newItem = insertItem.get(name, price, source, null, 0) as {
             id: number;
             name: string;
@@ -307,14 +462,14 @@ export async function POST(request: Request) {
             taxable: number;
           };
 
-          // Add to receipt items
-          insertReceiptItem.run(receiptId, newItem.id, price, 0);
+          // Add to receipt items, ensure we pass the taxable flag from the inserted item
+          insertReceiptItem.run(receiptId, newItem.id, price, newItem.taxable);
 
           // Add to result
           items.push({
             ...newItem,
             is_new: true,
-            taxable: false,
+            taxable: newItem.taxable === 1,
           });
 
           // Add to uncategorized
@@ -322,7 +477,7 @@ export async function POST(request: Request) {
             id: newItem.id,
             name: newItem.name,
             price: newItem.price,
-            taxable: false,
+            taxable: newItem.taxable === 1,
           });
         }
       }

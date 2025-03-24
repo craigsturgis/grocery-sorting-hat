@@ -131,20 +131,20 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
 
       // Update local state
       if (receipt) {
+        const newItems = receipt.items.map((item) =>
+          item.item_id === itemId ? { ...item, taxable: !currentStatus } : item
+        );
+
+        // Recalculate total tax based on updated items
+        const newTotalTax = newItems.reduce(
+          (sum, item) => sum + (item.taxable ? item.price * 0.07 : 0),
+          0
+        );
+
         setReceipt({
           ...receipt,
-          items: receipt.items.map((item) =>
-            item.item_id === itemId
-              ? { ...item, taxable: !currentStatus }
-              : item
-          ),
-          // Recalculate tax
-          totalTax: receipt.items.reduce((sum, item) => {
-            if (item.item_id === itemId) {
-              return sum + (!currentStatus ? item.price * 0.07 : 0); // Toggle the status
-            }
-            return sum + (item.taxable ? item.price * 0.07 : 0);
-          }, 0),
+          items: newItems,
+          totalTax: newTotalTax,
         });
       }
     } catch (err) {
@@ -314,25 +314,25 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
                   <tr>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2"
                     >
                       Item
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4"
                     >
                       Category
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]"
                     >
                       Taxable
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]"
                     >
                       Price
                     </th>
@@ -341,27 +341,27 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {receipt.items.map((item) => (
                     <tr key={item.receipt_item_id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 text-sm text-gray-900 break-words">
                         {item.name}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 text-sm text-gray-900">
                         {item.category_name || "Uncategorized"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      <td className="px-6 py-4 text-sm text-center">
                         <div className="flex justify-center items-center">
                           <input
                             type="checkbox"
-                            checked={item.taxable}
+                            checked={!!item.taxable}
                             onChange={() =>
-                              toggleTaxableStatus(item.item_id, item.taxable)
+                              toggleTaxableStatus(item.item_id, !!item.taxable)
                             }
                             disabled={taxUpdating === item.item_id}
                             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                        {item.taxable ? (
+                      <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                        {!!item.taxable ? (
                           <div>
                             <div>{formatPrice(item.price)}</div>
                             <div className="text-xs text-green-600">
