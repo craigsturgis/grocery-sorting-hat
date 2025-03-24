@@ -26,15 +26,16 @@ interface UncategorizedTotal {
 }
 
 // GET a single receipt with all items and categories
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   // Initialize the database before processing the request
   await setupServer();
 
   try {
-    // Extract ID from the URL path
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const id = pathParts[pathParts.length - 1];
+    // Access id - properly await the params promise
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(
