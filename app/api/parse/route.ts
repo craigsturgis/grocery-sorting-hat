@@ -183,13 +183,20 @@ function parseWalmartGroceryList(
       line === "Shopped" ||
       line === "Add to cart" ||
       line === "Review item" ||
-      line === ""
+      line === "" ||
+      line === "Approved substitution" ||
+      line === "Weight-adjusted"
     ) {
       continue;
     }
 
     // Skip Walmart Cash line
     if (line.includes("Walmart Cash")) {
+      continue;
+    }
+
+    // Skip standalone numbers (like "2", "3", "4") that appear in the receipt
+    if (/^\d+$/.test(line)) {
       continue;
     }
 
@@ -294,7 +301,9 @@ function parseWalmartGroceryList(
       line.match(/^Count Per Pack: \d+$/) ||
       line.match(/^\d+\.\d+¢\/[a-z]+$/) ||
       line.match(/\$\d+\.\d+\/[a-z]+/) ||
-      line.match(/\$\d+\.\d+ ea/)
+      line.match(/\$\d+\.\d+ ea/) ||
+      line.match(/^Size: \d+$/) ||
+      line.match(/^Actual Color: [A-Za-z]+$/)
     ) {
       continue;
     }
