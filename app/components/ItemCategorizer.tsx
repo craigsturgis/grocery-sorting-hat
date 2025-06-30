@@ -54,7 +54,7 @@ export default function ItemCategorizer({
       if (!categoriesResponse.ok) {
         throw new Error("Failed to fetch categories");
       }
-      const categoriesData = await categoriesResponse.json();
+      const categoriesData = await categoriesResponse.json() as Category[];
       setCategories(categoriesData);
 
       // Fetch receipt details
@@ -62,7 +62,7 @@ export default function ItemCategorizer({
       if (!receiptResponse.ok) {
         throw new Error("Failed to fetch receipt details");
       }
-      const receiptData = await receiptResponse.json();
+      const receiptData = await receiptResponse.json() as { items: ReceiptItem[] };
 
       // Filter out uncategorized items
       const uncategorized = receiptData.items
@@ -173,7 +173,7 @@ export default function ItemCategorizer({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || "Failed to categorize items");
       }
 

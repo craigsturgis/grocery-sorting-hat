@@ -5,6 +5,15 @@ interface GroceryParserProps {
   onParseComplete?: (receiptId: number) => void;
 }
 
+interface ParseResponse {
+  receiptId: number;
+  uncategorizedItems?: Array<{
+    id: number;
+    name: string;
+    price: number;
+  }>;
+}
+
 export default function GroceryParser({ onParseComplete }: GroceryParserProps) {
   const router = useRouter();
   const [groceryText, setGroceryText] = useState("");
@@ -36,11 +45,11 @@ export default function GroceryParser({ onParseComplete }: GroceryParserProps) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || "Failed to parse grocery list");
       }
 
-      const data = await response.json();
+      const data = await response.json() as ParseResponse;
       setGroceryText("");
 
       // If there are uncategorized items, navigate to categorization page

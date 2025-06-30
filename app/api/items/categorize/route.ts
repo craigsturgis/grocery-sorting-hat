@@ -1,10 +1,16 @@
-import { NextResponse } from "next/server";
-import db from "../../../../lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { UserDatabase } from "@/lib/d1-db";
+import { requireAuth } from "@/lib/auth-helpers";
+import { getCloudflareEnv } from "@/lib/cloudflare-env";
+
+export const runtime = "edge";
 
 // PUT route to update category for an item
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
-    const { itemId, categoryId } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { itemId, categoryId } = await request.json() as { itemId: number; categoryId: number | null };
 
     if (!itemId) {
       return NextResponse.json(
@@ -20,38 +26,17 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Check if item exists
-    const itemExists = db
-      .prepare("SELECT id FROM items WHERE id = ?")
-      .get(itemId);
-
-    if (!itemExists) {
-      return NextResponse.json({ error: "Item not found" }, { status: 404 });
-    }
-
-    // If categoryId is not null, check if category exists
-    if (categoryId !== null) {
-      const categoryExists = db
-        .prepare("SELECT id FROM categories WHERE id = ?")
-        .get(categoryId);
-
-      if (!categoryExists) {
-        return NextResponse.json(
-          { error: "Category not found" },
-          { status: 404 }
-        );
-      }
-    }
+    const userDb = new UserDatabase(env.DB, user.id);
 
     // Update item category
-    const updateItem = db.prepare(
-      "UPDATE items SET category_id = ? WHERE id = ? RETURNING *"
-    );
-    const updatedItem = updateItem.get(categoryId, itemId);
+    await userDb.updateItemCategory(itemId, categoryId);
 
-    return NextResponse.json(updatedItem);
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to update item category:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to update item category" },
       { status: 500 }
@@ -60,9 +45,11 @@ export async function PUT(request: Request) {
 }
 
 // POST route to categorize multiple items at once
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { items, categoryId } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { items, categoryId } = await request.json() as { items: number[]; categoryId: number | null };
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -78,33 +65,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // If categoryId is not null, check if category exists
-    if (categoryId !== null) {
-      const categoryExists = db
-        .prepare("SELECT id FROM categories WHERE id = ?")
-        .get(categoryId);
+    const userDb = new UserDatabase(env.DB, user.id);
 
-      if (!categoryExists) {
-        return NextResponse.json(
-          { error: "Category not found" },
-          { status: 404 }
-        );
-      }
+    // Update all items
+    for (const itemId of items) {
+      await userDb.updateItemCategory(itemId, categoryId);
     }
-
-    // Update all items in a transaction
-    const updateItem = db.prepare(
-      "UPDATE items SET category_id = ? WHERE id = ?"
-    );
-
-    const transaction = db.transaction(() => {
-      for (const itemId of items) {
-        updateItem.run(categoryId, itemId);
-      }
-    });
-
-    // Run transaction
-    transaction();
 
     return NextResponse.json({
       success: true,
@@ -113,6 +79,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Failed to categorize items:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to categorize items" },
       { status: 500 }

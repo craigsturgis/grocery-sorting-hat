@@ -24,7 +24,7 @@ export default function CategoryManager() {
       if (!response.ok) {
         throw new Error("Failed to fetch categories");
       }
-      const data = await response.json();
+      const data = await response.json() as Category[];
       setCategories(data);
       setError(null);
     } catch (err) {
@@ -50,11 +50,11 @@ export default function CategoryManager() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || "Failed to add category");
       }
 
-      const addedCategory = await response.json();
+      const addedCategory = await response.json() as Category;
       setCategories([...categories, addedCategory]);
       setNewCategory("");
       setError(null);
@@ -84,7 +84,7 @@ export default function CategoryManager() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || "Failed to delete category");
       }
 
