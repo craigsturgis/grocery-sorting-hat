@@ -11,15 +11,60 @@ type ActiveTab = "parser" | "categories" | "receipts";
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>("parser");
+  const [loading, setLoading] = useState(true);
+
+  // Check authentication on mount
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      // Try to fetch categories as a way to check if authenticated
+      const response = await fetch("/api/categories");
+      if (response.status === 401) {
+        router.push("/login");
+      } else {
+        setLoading(false);
+      }
+    } catch {
+      router.push("/login");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   const navigateToReceipt = (receiptId: number) => {
     router.push(`/receipts/${receiptId}`);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen p-4 md:p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col items-center justify-center mb-8 logo-container">
+        <div className="flex flex-col items-center justify-center mb-8 logo-container relative">
+          {/* Logout button in top right */}
+          <button
+            onClick={handleLogout}
+            className="absolute top-0 right-0 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+          >
+            Logout
+          </button>
+          
           <Image
             src="/sorting-hat-logo.svg"
             alt="Grocery Sorting Hat Logo"
@@ -135,9 +180,13 @@ function ReceiptList() {
 
       const response = await fetch("/api/receipts");
       if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         throw new Error("Failed to fetch receipts");
       }
-      const data = await response.json();
+      const data = await response.json() as Receipt[];
       setReceipts(data);
     } catch (err) {
       if (err instanceof Error) {

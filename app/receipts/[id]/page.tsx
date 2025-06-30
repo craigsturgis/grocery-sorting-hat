@@ -1,14 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ItemCategorizer from "../../components/ItemCategorizer";
 import ReceiptSummary from "../../components/ReceiptSummary";
 
-export default function ReceiptPage({ params }: { params: { id: string } }) {
+export const runtime = "edge";
+
+interface ReceiptPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function ReceiptPage({ params }: ReceiptPageProps) {
   const router = useRouter();
   const [showSummary, setShowSummary] = useState(false);
-  const receiptId = parseInt(params.id, 10);
+  const [receiptId, setReceiptId] = useState<number | null>(null);
+
+  useEffect(() => {
+    params.then((resolvedParams) => {
+      const id = parseInt(resolvedParams.id, 10);
+      setReceiptId(id);
+    });
+  }, [params]);
+
+  if (receiptId === null) {
+    return (
+      <div className="min-h-screen p-4 md:p-8 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="p-4 text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (isNaN(receiptId)) {
     return (

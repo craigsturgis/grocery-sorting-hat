@@ -55,7 +55,7 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
       if (!response.ok) {
         throw new Error("Failed to fetch receipt details");
       }
-      const data = await response.json();
+      const data = await response.json() as Receipt;
 
       // Calculate tax amounts if not provided by the API
       if (data && !data.totalTax) {

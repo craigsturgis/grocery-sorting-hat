@@ -1,15 +1,25 @@
-import { NextResponse } from "next/server";
-import db from "../../../lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { UserDatabase } from "@/lib/d1-db";
+import { requireAuth } from "@/lib/auth-helpers";
+import { getCloudflareEnv } from "@/lib/cloudflare-env";
+
+export const runtime = "edge";
 
 // GET all categories
 export async function GET() {
   try {
-    const categories = db
-      .prepare("SELECT * FROM categories ORDER BY name")
-      .all();
-    return NextResponse.json(categories);
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    
+    const userDb = new UserDatabase(env.DB, user.id);
+    const categories = await userDb.getCategories();
+    
+    return NextResponse.json(categories.results);
   } catch (error) {
     console.error("Failed to fetch categories:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to fetch categories" },
       { status: 500 }
@@ -18,9 +28,11 @@ export async function GET() {
 }
 
 // POST new category
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { name } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { name } = await request.json() as { name: string };
 
     if (!name) {
       return NextResponse.json(
@@ -29,14 +41,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const insert = db.prepare(
-      "INSERT INTO categories (name) VALUES (?) RETURNING *"
-    );
-    const category = insert.get(name);
+    const userDb = new UserDatabase(env.DB, user.id);
+    const result = await userDb.createCategory(name);
 
-    return NextResponse.json(category, { status: 201 });
+    return NextResponse.json({ id: result.meta.last_row_id, name }, { status: 201 });
   } catch (error) {
     console.error("Failed to create category:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     // Check if it's a unique constraint violation
     if (
       error instanceof Error &&
@@ -55,9 +68,11 @@ export async function POST(request: Request) {
 }
 
 // DELETE category by ID
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
-    const { id } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { id } = await request.json() as { id: number };
 
     if (!id) {
       return NextResponse.json(
@@ -67,11 +82,12 @@ export async function DELETE(request: Request) {
     }
 
     // Check if any items use this category
-    const itemsWithCategory = db
-      .prepare("SELECT COUNT(*) as count FROM items WHERE category_id = ?")
-      .get(id) as { count: number };
+    const itemsWithCategory = await env.DB
+      .prepare("SELECT COUNT(*) as count FROM items WHERE category_id = ? AND user_id = ?")
+      .bind(id, user.id)
+      .first<{ count: number }>();
 
-    if (itemsWithCategory.count > 0) {
+    if (itemsWithCategory && itemsWithCategory.count > 0) {
       return NextResponse.json(
         {
           error: "Cannot delete category that has items assigned to it",
@@ -80,10 +96,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const deleteStatement = db.prepare("DELETE FROM categories WHERE id = ?");
-    const result = deleteStatement.run(id);
+    const userDb = new UserDatabase(env.DB, user.id);
+    const result = await userDb.deleteCategory(id);
 
-    if (result.changes === 0) {
+    if (!result.success) {
       return NextResponse.json(
         { error: "Category not found" },
         { status: 404 }
@@ -93,6 +109,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
     console.error("Failed to delete category:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to delete category" },
       { status: 500 }

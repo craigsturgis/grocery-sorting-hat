@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-// Middleware function
-export function middleware() {
-  // Simple pass-through middleware
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     * - api/auth (authentication endpoints)
+     * - login/register pages
+     */
+    "/((?!_next/static|_next/image|favicon.ico|public|api/auth|login|register).*)",
+  ],
+};
+
+export function middleware(request: NextRequest) {
+  // For Cloudflare Pages Functions, we'll handle auth checks in the API routes
+  // This is because the execution model is different from traditional Next.js
   return NextResponse.next();
 }
-
-// Configure the middleware to run for API routes
-export const config = {
-  matcher: "/api/:path*",
-};

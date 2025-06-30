@@ -1,0 +1,20 @@
+name = "grocery-sorting-hat"
+compatibility_date = "2024-12-01"
+compatibility_flags = [ "nodejs_compat" ]
+pages_build_output_dir = ".vercel/output/static"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "grocery-sorting-hat"
+database_id = "be3bfbbe-05a7-454a-9bed-6bd7560a983f"
+
+# KV namespace for sessions
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "356c90c7e13c448fb9038b5eab17d461"
+
+# Environment variables
+[vars]
+AUTH_SECRET = "en0OT/g6Xl9iOncurQuM26yXyeCU1vtzflRZz8ygjPg="
+NEXTAUTH_URL = "https://816f4717.grocery-sorting-hat.pages.dev"

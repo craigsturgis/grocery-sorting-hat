@@ -1,14 +1,16 @@
-import { NextResponse } from "next/server";
-import db from "../../../../lib/db";
-import { setupServer } from "../../../../lib/serverSetup";
+import { NextRequest, NextResponse } from "next/server";
+import { UserDatabase } from "@/lib/d1-db";
+import { requireAuth } from "@/lib/auth-helpers";
+import { getCloudflareEnv } from "@/lib/cloudflare-env";
+
+export const runtime = "edge";
 
 // POST route to update taxable status of an item
-export async function POST(request: Request) {
-  // Initialize the database before processing the request
-  await setupServer();
-
+export async function POST(request: NextRequest) {
   try {
-    const { itemId, taxable } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { itemId, taxable } = await request.json() as { itemId: number; taxable: boolean };
 
     if (itemId === undefined) {
       return NextResponse.json(
@@ -24,22 +26,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update the item's taxable status in the database
-    const updateItem = db.prepare("UPDATE items SET taxable = ? WHERE id = ?");
+    const userDb = new UserDatabase(env.DB, user.id);
+
+    // Update the item's taxable status
+    await userDb.updateItemTaxable(itemId, taxable);
 
     // Also update all existing receipt_items for this item for consistency
-    const updateReceiptItems = db.prepare(
-      "UPDATE receipt_items SET taxable = ? WHERE item_id = ?"
-    );
-
-    // Start a transaction to ensure both updates succeed or fail together
-    const transaction = db.transaction(() => {
-      updateItem.run(taxable ? 1 : 0, itemId);
-      updateReceiptItems.run(taxable ? 1 : 0, itemId);
-    });
-
-    // Execute transaction
-    transaction();
+    await env.DB
+      .prepare("UPDATE receipt_items SET taxable = ? WHERE item_id = ?")
+      .bind(taxable ? 1 : 0, itemId)
+      .run();
 
     // Return success response
     return NextResponse.json(
@@ -52,6 +48,9 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Failed to update taxable status:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to update taxable status" },
       { status: 500 }

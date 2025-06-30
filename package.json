@@ -6,16 +6,32 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "preview": "npx wrangler pages dev .vercel/output/static",
+    "deploy": "npx wrangler pages deploy",
+    "db:create": "npx wrangler d1 create grocery-sorting-hat",
+    "db:migrate": "npx wrangler d1 execute grocery-sorting-hat --local --file=./migrations/0001_initial_schema.sql",
+    "db:migrate:prod": "npx wrangler d1 execute grocery-sorting-hat --file=./migrations/0001_initial_schema.sql",
+    "db:import": "tsx scripts/import-sqlite-to-d1.ts"
   },
   "dependencies": {
+    "@auth/core": "^0.40.0",
+    "@auth/d1-adapter": "^1.10.0",
+    "@cloudflare/next-on-pages": "^1.13.12",
+    "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",
+    "bcryptjs": "^3.0.2",
+    "better-auth": "^1.2.12",
     "better-sqlite3": "^11.9.1",
+    "jose": "^6.0.11",
     "next": "15.2.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "wrangler": "^4.22.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250628.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -25,6 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }

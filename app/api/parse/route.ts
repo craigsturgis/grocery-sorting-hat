@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
-import db from "../../../lib/db";
-import { setupServer } from "../../../lib/serverSetup";
+import { NextResponse, NextRequest } from "next/server";
+import { UserDatabase } from "@/lib/d1-db";
+import { requireAuth } from "@/lib/auth-helpers";
+import { getCloudflareEnv } from "@/lib/cloudflare-env";
+
+export const runtime = "edge";
 
 // Function to parse grocery list based on source
 function parseGroceryList(
@@ -375,12 +378,11 @@ interface UncategorizedItem {
 }
 
 // POST route to parse and process grocery list
-export async function POST(request: Request) {
-  // Initialize the database before processing the request
-  await setupServer();
-
+export async function POST(request: NextRequest) {
   try {
-    const { text, source } = await request.json();
+    const env = getCloudflareEnv();
+    const user = await requireAuth();
+    const { text, source } = await request.json() as { text: string; source: string };
 
     if (!text) {
       return NextResponse.json(
@@ -406,94 +408,81 @@ export async function POST(request: Request) {
       );
     }
 
+    const userDb = new UserDatabase(env.DB, user.id);
+
     // Create a new receipt
-    const insertReceipt = db.prepare(
-      "INSERT INTO receipts (source) VALUES (?) RETURNING id"
-    );
-    const { id: receiptId } = insertReceipt.get(source) as { id: number };
+    const receiptResult = await userDb.createReceipt(source);
+    const receiptId = Number(receiptResult.meta.last_row_id);
 
     // Process each item
     const items: GroceryItem[] = [];
     const uncategorizedItems: UncategorizedItem[] = [];
 
-    // Prepare statements
-    const findItem = db.prepare(
-      "SELECT id, category_id, taxable FROM items WHERE name = ?"
-    );
-    const insertItem = db.prepare(
-      "INSERT INTO items (name, price, source, category_id, taxable) VALUES (?, ?, ?, ?, ?) RETURNING *"
-    );
-    const insertReceiptItem = db.prepare(
-      "INSERT INTO receipt_items (receipt_id, item_id, price, taxable) VALUES (?, ?, ?, ?)"
-    );
+    for (const { name, price } of parsedItems) {
+      // Check if item exists for this user
+      const existingItem = await userDb.getItemByName(name);
 
-    // Start a transaction
-    const transaction = db.transaction(() => {
-      for (const { name, price } of parsedItems) {
-        // Check if item exists
-        const existingItem = findItem.get(name) as
-          | { id: number; category_id: number | null; taxable: number }
-          | undefined;
+      if (existingItem) {
+        // Use existing item
+        const itemId = existingItem.id as number;
+        const taxable = existingItem.taxable === 1;
 
-        if (existingItem) {
-          // Use existing item
-          const itemId = existingItem.id;
+        // Add to receipt items
+        await userDb.addReceiptItem(receiptId, itemId, price, taxable);
 
-          // Add to receipt items - explicitly use existingItem.taxable to ensure it persists
-          insertReceiptItem.run(receiptId, itemId, price, existingItem.taxable);
+        // Add to result
+        items.push({
+          id: itemId,
+          name,
+          price,
+          category_id: existingItem.category_id as number | null,
+          is_new: false,
+          taxable,
+        });
 
-          // Add to result
-          items.push({
+        // Check if uncategorized
+        if (existingItem.category_id === null) {
+          uncategorizedItems.push({
             id: itemId,
             name,
             price,
-            category_id: existingItem.category_id,
-            is_new: false,
-            taxable: existingItem.taxable === 1,
-          });
-
-          // Check if uncategorized
-          if (existingItem.category_id === null) {
-            uncategorizedItems.push({
-              id: itemId,
-              name,
-              price,
-              taxable: existingItem.taxable === 1,
-            });
-          }
-        } else {
-          // Create new item without category, with default taxable set to 0 (false)
-          const newItem = insertItem.get(name, price, source, null, 0) as {
-            id: number;
-            name: string;
-            price: number;
-            category_id: null;
-            taxable: number;
-          };
-
-          // Add to receipt items, ensure we pass the taxable flag from the inserted item
-          insertReceiptItem.run(receiptId, newItem.id, price, newItem.taxable);
-
-          // Add to result
-          items.push({
-            ...newItem,
-            is_new: true,
-            taxable: newItem.taxable === 1,
-          });
-
-          // Add to uncategorized
-          uncategorizedItems.push({
-            id: newItem.id,
-            name: newItem.name,
-            price: newItem.price,
-            taxable: newItem.taxable === 1,
+            taxable,
           });
         }
-      }
-    });
+      } else {
+        // Create new item without category
+        const newItemResult = await userDb.createOrUpdateItem(
+          name,
+          price,
+          source,
+          undefined,
+          false
+        );
+        
+        const newItemId = Number(newItemResult.meta.last_row_id);
 
-    // Execute transaction
-    transaction();
+        // Add to receipt items
+        await userDb.addReceiptItem(receiptId, newItemId, price, false);
+
+        // Add to result
+        items.push({
+          id: newItemId,
+          name,
+          price,
+          category_id: null,
+          is_new: true,
+          taxable: false,
+        });
+
+        // Add to uncategorized
+        uncategorizedItems.push({
+          id: newItemId,
+          name,
+          price,
+          taxable: false,
+        });
+      }
+    }
 
     // Return results
     return NextResponse.json(
@@ -507,6 +496,9 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("Failed to parse grocery list:", error);
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Failed to parse grocery list" },
       { status: 500 }
