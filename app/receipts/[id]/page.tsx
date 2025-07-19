@@ -73,7 +73,15 @@ export default function ReceiptPage({ params }: ReceiptPageProps) {
               onComplete={() => setShowSummary(true)}
             />
           ) : (
-            <ReceiptSummary receiptId={receiptId} />
+            <div className="space-y-4">
+              <ReceiptSummary receiptId={receiptId} />
+              <button
+                onClick={() => setShowSummary(false)}
+                className="w-full px-4 py-2 text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Back to Categorization
+              </button>
+            </div>
           )}
         </div>
       </div>

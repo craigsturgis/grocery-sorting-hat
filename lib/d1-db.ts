@@ -135,13 +135,17 @@ export class UserDatabase {
 
     const items = await this.db
       .prepare(`
-        SELECT receipt_items.*, items.name, categories.name as category_name
+        SELECT 
+          receipt_items.*, 
+          items.name, 
+          items.category_id,
+          categories.name as category_name
         FROM receipt_items
-        JOIN items ON receipt_items.item_id = items.id
-        LEFT JOIN categories ON items.category_id = categories.id
+        JOIN items ON receipt_items.item_id = items.id AND items.user_id = ?
+        LEFT JOIN categories ON items.category_id = categories.id AND categories.user_id = ?
         WHERE receipt_items.receipt_id = ?
       `)
-      .bind(id)
+      .bind(this.userId, this.userId, id)
       .all();
 
     return { ...receipt, items: items.results };

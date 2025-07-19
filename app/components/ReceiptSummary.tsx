@@ -5,6 +5,8 @@ interface CategoryTotal {
   id: number | null;
   name: string;
   total: number;
+  totalTax: number;
+  totalWithTax: number;
   count: number;
 }
 
@@ -259,8 +261,8 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
             {/* Category chart - Simple bar visualization */}
             <div className="space-y-4">
               {receipt.categoryTotals.map((category) => {
-                // Calculate tax for this category
-                const categoryTax = receipt.items
+                // Use new fields if available, otherwise calculate
+                const categoryTax = category.totalTax ?? receipt.items
                   .filter(
                     (item) =>
                       item.category_id === category.id ||
@@ -271,7 +273,7 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
                     0
                   );
 
-                const totalWithTax = category.total + categoryTax;
+                const totalWithTax = category.totalWithTax ?? (category.total + categoryTax);
 
                 return (
                   <div key={category.id ?? "uncategorized"}>

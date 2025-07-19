@@ -11,6 +11,8 @@ interface CategoryTotal {
   id: number | null;
   name: string;
   total: number;
+  totalTax: number;
+  totalWithTax: number;
   count: number;
 }
 
@@ -40,13 +42,16 @@ export async function GET(
 
     // Calculate category totals from items
     const categoryTotals: CategoryTotal[] = [];
-    const categoryMap = new Map<string, { total: number; count: number }>();
+    const categoryMap = new Map<string, { total: number; totalTax: number; count: number }>();
 
-    for (const item of receipt.items as Array<{ category_name: string | null; price: number }>) {
+    for (const item of receipt.items as Array<{ category_name: string | null; price: number; taxable: boolean }>) {
       const categoryKey = item.category_name || "Uncategorized";
-      const existing = categoryMap.get(categoryKey) || { total: 0, count: 0 };
+      const existing = categoryMap.get(categoryKey) || { total: 0, totalTax: 0, count: 0 };
+      const itemTax = item.taxable ? item.price * 0.07 : 0;
+      
       categoryMap.set(categoryKey, {
         total: existing.total + item.price,
+        totalTax: existing.totalTax + itemTax,
         count: existing.count + 1,
       });
     }
@@ -56,6 +61,8 @@ export async function GET(
         id: name === "Uncategorized" ? null : 1, // We'll simplify this for now
         name,
         total: data.total,
+        totalTax: data.totalTax,
+        totalWithTax: data.total + data.totalTax,
         count: data.count,
       });
     }

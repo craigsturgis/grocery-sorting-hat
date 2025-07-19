@@ -16,7 +16,8 @@ interface ReceiptItem {
   item_id: number;
   name: string;
   price: number;
-  category_id: number | null;
+  category_id?: number | null;
+  category_name?: string | null;
   taxable: boolean;
 }
 
@@ -37,6 +38,9 @@ export default function ItemCategorizer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [totalItems, setTotalItems] = useState(0);
+  const [categorizedCount, setCategorizedCount] = useState(0);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -64,6 +68,12 @@ export default function ItemCategorizer({
       }
       const receiptData = await receiptResponse.json() as { items: ReceiptItem[] };
 
+      // Set total items count
+      setTotalItems(receiptData.items.length);
+      
+      console.log('Receipt data:', receiptData);
+      console.log('Items:', receiptData.items);
+
       // Filter out uncategorized items
       const uncategorized = receiptData.items
         .filter((item: ReceiptItem) => item.category_id === null)
@@ -73,8 +83,13 @@ export default function ItemCategorizer({
           price: item.price,
           taxable: item.taxable,
         }));
+        
+      console.log('Uncategorized items:', uncategorized);
 
       setUncategorizedItems(uncategorized);
+      
+      // Calculate categorized items count
+      setCategorizedCount(receiptData.items.length - uncategorized.length);
 
       // Initialize taxable items
       setTaxableItems(
@@ -82,6 +97,14 @@ export default function ItemCategorizer({
           .filter((item: Item) => item.taxable)
           .map((item: Item) => item.id)
       );
+      
+      // Only show confirmation on initial load, not when reviewing
+      if (uncategorized.length === 0 && showConfirmation === false) {
+        setShowConfirmation(true);
+      } else if (uncategorized.length > 0) {
+        // Reset confirmation if we find uncategorized items
+        setShowConfirmation(false);
+      }
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -186,17 +209,16 @@ export default function ItemCategorizer({
       );
 
       // Remove categorized items from list
-      setUncategorizedItems(
-        uncategorizedItems.filter((item) => !selectedItems.includes(item.id))
-      );
+      const remainingItems = uncategorizedItems.filter((item) => !selectedItems.includes(item.id));
+      setUncategorizedItems(remainingItems);
       setSelectedItems([]);
+      
+      // Update categorized count
+      setCategorizedCount(categorizedCount + selectedItems.length);
 
-      // If all items are categorized, call onComplete
-      if (
-        uncategorizedItems.length - selectedItems.length === 0 &&
-        onComplete
-      ) {
-        onComplete();
+      // If all items are categorized, show confirmation
+      if (remainingItems.length === 0) {
+        setShowConfirmation(true);
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -227,16 +249,64 @@ export default function ItemCategorizer({
     }).format(priceWithTax);
   };
 
-  if (loading && uncategorizedItems.length === 0) {
-    return <div className="text-center py-8">Loading...</div>;
-  }
 
-  if (uncategorizedItems.length === 0) {
+  if (showConfirmation) {
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Item Categorization</h2>
         <div className="p-4 text-center bg-green-100 text-green-800 rounded-md">
           All items have been categorized!
+        </div>
+        <div className="text-center text-sm text-gray-600">
+          {categorizedCount} of {totalItems} items categorized
+        </div>
+        <div className="flex space-x-4">
+          <button
+            onClick={async () => {
+              setShowConfirmation(false);
+              setLoading(true);
+              // Force a fresh fetch by clearing state first
+              setUncategorizedItems([]);
+              await fetchData();
+            }}
+            className="flex-1 px-4 py-2 text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Review Categorization
+          </button>
+          {onComplete && (
+            <button
+              onClick={onComplete}
+              className="flex-1 px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              View Receipt Summary
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Item Categorization</h2>
+        <div className="p-4 text-center bg-gray-100 text-gray-800 rounded-md">
+          Loading items...
+        </div>
+      </div>
+    );
+  }
+  
+  // This shouldn't happen but just in case
+  if (uncategorizedItems.length === 0 && !showConfirmation) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Item Categorization</h2>
+        <div className="p-4 text-center bg-green-100 text-green-800 rounded-md">
+          All items have been categorized!
+        </div>
+        <div className="text-center text-sm text-gray-600">
+          {categorizedCount} of {totalItems} items categorized
         </div>
         {onComplete && (
           <button
@@ -252,7 +322,12 @@ export default function ItemCategorizer({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">Item Categorization</h2>
+      <div className="flex justify-between items-baseline">
+        <h2 className="text-xl font-bold">Item Categorization</h2>
+        <div className="text-sm text-gray-600">
+          Progress: {categorizedCount} of {totalItems} items categorized
+        </div>
+      </div>
 
       {/* Success message */}
       {successMessage && (
