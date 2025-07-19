@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local database
+grocery-data.db
+*.db
+
+# cloudflare wrangler
+.wrangler/
