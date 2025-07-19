@@ -113,8 +113,9 @@ export class UserDatabase {
   async getReceipts() {
     return await this.db
       .prepare(`
-        SELECT receipts.*, COUNT(receipt_items.id) as item_count, 
-               SUM(receipt_items.price) as total
+        SELECT receipts.*, 
+               COUNT(receipt_items.id) as total_items, 
+               COALESCE(SUM(receipt_items.price), 0) as total_amount
         FROM receipts
         LEFT JOIN receipt_items ON receipts.id = receipt_items.receipt_id
         WHERE receipts.user_id = ?
