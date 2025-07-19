@@ -41,6 +41,8 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "items">("summary");
   const [taxUpdating, setTaxUpdating] = useState<number | null>(null);
+  const [uncategorizingItem, setUncategorizingItem] = useState<number | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Fetch receipt data on component mount
   useEffect(() => {
@@ -156,6 +158,41 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
     }
   };
 
+  // Reset categorization for an item
+  const resetCategorization = async (itemId: number) => {
+    if (uncategorizingItem === itemId) return; // Prevent double clicks
+
+    try {
+      setUncategorizingItem(itemId);
+
+      const response = await fetch("/api/items/uncategorize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          itemId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reset categorization");
+      }
+
+      // Recalculate category totals
+      await fetchReceipt();
+      
+      // Show success message
+      setSuccessMessage("Item categorization reset. You can re-categorize it from the categorization screen.");
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error("Error resetting categorization:", err);
+      setError("Failed to reset item categorization");
+    } finally {
+      setUncategorizingItem(null);
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-8">Loading receipt data...</div>;
   }
@@ -197,6 +234,13 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
 
   return (
     <div className="space-y-6">
+      {/* Success message */}
+      {successMessage && (
+        <div className="p-3 text-sm text-green-700 bg-green-100 rounded-md">
+          {successMessage}
+        </div>
+      )}
+      
       <div className="border-b pb-6">
         <h2 className="text-2xl font-bold">Receipt #{receipt.id}</h2>
         <div className="mt-2 flex flex-col md:flex-row justify-between text-gray-600">
@@ -316,27 +360,33 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
                   <tr>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Item
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Category
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]"
+                      className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Taxable
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]"
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Price
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -373,6 +423,20 @@ export default function ReceiptSummary({ receiptId }: ReceiptSummaryProps) {
                         ) : (
                           formatPrice(item.price)
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-center">
+                        <button
+                          onClick={() => resetCategorization(item.item_id)}
+                          disabled={uncategorizingItem === item.item_id || !item.category_id}
+                          className={`px-3 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                            item.category_id
+                              ? "text-red-700 bg-red-100 hover:bg-red-200 focus:ring-red-500"
+                              : "text-gray-400 bg-gray-100 cursor-not-allowed"
+                          }`}
+                          title={item.category_id ? "Reset categorization" : "Already uncategorized"}
+                        >
+                          {uncategorizingItem === item.item_id ? "..." : "Reset"}
+                        </button>
                       </td>
                     </tr>
                   ))}
