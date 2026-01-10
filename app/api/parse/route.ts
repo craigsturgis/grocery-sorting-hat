@@ -22,148 +22,91 @@ function parseGroceryList(
 }
 
 // Parser for Kroger format
+// Handles the new Kroger purchases page format with "Save to List" blocks
+// and "Received: X Paid: $Y.ZZ" structure
 function parseKrogerGroceryList(
   text: string
 ): { name: string; price: number }[] {
-  const lines = text.split("\n").filter((line) => line.trim() !== "");
   const items: { name: string; price: number }[] = [];
 
-  let currentItem: { name: string; price: number | null } | null = null;
+  // Split into item blocks using "Save to List" or "Saved, View List" as delimiters
+  const blocks = text.split(/(?=Save to List|Saved, View List)/);
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  for (const block of blocks) {
+    const lines = block.split("\n").map((line) => line.trim()).filter((line) => line !== "");
 
-    // Skip lines that are clearly not product names or prices
-    if (
-      line.includes("SNAP EBT") ||
-      line.includes("Save to List") ||
-      line.includes("Add to Cart") ||
-      line.includes("Featured") ||
-      line.includes("View Offer") ||
-      line.includes("Buy 2 For") ||
-      line.includes("Saved, View List") ||
-      /^\d+ (oz|fl oz|lbs|ct)$/.test(line) ||
-      /^\d+ ct \/ \d+oz$/.test(line)
-    ) {
-      continue;
-    }
+    if (lines.length < 3) continue;
 
-    // Check if this is a product name line (usually ends with ", 1 total" or similar)
-    if (
-      line.match(/,\s+[\d\.]+\s+total$/) ||
-      // Also recognize standalone product names that don't follow the standard pattern
-      (i < lines.length - 1 &&
-        !line.includes("$") &&
-        !line.match(/^\d/) &&
-        !line.includes("discounted from") &&
-        lines[i + 1].includes("$"))
-    ) {
-      // If we have a previous item, add it to our items list
-      if (currentItem && currentItem.price !== null) {
-        items.push({
-          name: currentItem.name,
-          price: currentItem.price,
-        });
+    // Find the product name - it's the first line after "Save to List" or "Saved, View List"
+    // that isn't a UI element. The name typically appears twice, so we take the first occurrence.
+    let productName: string | null = null;
+    let paidPrice: number | null = null;
+
+    // Lines to skip when looking for product name
+    const skipPatterns = [
+      /^Save to List$/,
+      /^Saved, View List$/,
+      /^SNAP EBT$/,
+      /^Add to Cart$/,
+      /^Low Stock$/,
+      /^Item Unavailable$/,
+      /^\d+(\.\d+)?\s*(oz|fl oz|lbs?|ct|gal|bag|Pack)/, // Size/weight lines
+      /^\$\d+\.\d+/, // Price lines
+      /^about/, // "about $X.XX each" lines
+      /^Price Cut$/,
+      /^Buy \d+/, // Promotional text like "Buy 1 Get 1"
+      /^Save \$/, // "Save $X" promotions
+      /^Coupon:/, // Coupon lines
+      /^Received:/, // Received/Paid lines
+      /discounted from/,
+    ];
+
+    for (const line of lines) {
+      // Skip UI elements and metadata
+      if (skipPatterns.some((pattern) => pattern.test(line))) {
+        continue;
       }
 
-      // Start a new item, removing the ", X total" suffix if present
-      currentItem = {
-        name: line.replace(/,\s+[\d\.]+\s+total$/, "").trim(),
-        price: null,
-      };
+      // Found the product name
+      if (!productName) {
+        productName = line;
+        break;
+      }
     }
-    // Check if this is a price line (contains price with $ sign)
-    else if (line.match(/^\$[\d\.]+$/)) {
-      // This is a standalone price line (e.g., "$1.15")
-      const priceMatch = line.match(/\$[\d\.]+/);
-      if (priceMatch && currentItem) {
-        currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
 
-        // Check if the next line indicates this is a discounted price
-        // If so, skip the "discounted from" and the original price lines
-        if (i + 1 < lines.length && lines[i + 1].trim() === "discounted from") {
-          // Skip the "discounted from" line
-          i++;
-          // Skip the original price line
-          if (
-            i + 1 < lines.length &&
-            lines[i + 1].trim().match(/^\$[\d\.]+$/)
-          ) {
-            i++;
+    // Find the "Paid:" price - look for "Received: X Paid:" pattern
+    // The price follows on the same line or the next line
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check for "Received: X Paid:" or just "Paid:" pattern
+      if (line.includes("Paid:")) {
+        // Try to extract price from same line first (e.g., "Received: 1 Paid: $5.49")
+        const sameLine = line.match(/Paid:\s*\$?([\d.]+)/);
+        if (sameLine) {
+          paidPrice = parseFloat(sameLine[1]);
+        } else {
+          // Price is on the next line
+          if (i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            // Extract first price (the actual paid amount, not "discounted from" amount)
+            const priceMatch = nextLine.match(/\$([\d.]+)/);
+            if (priceMatch) {
+              paidPrice = parseFloat(priceMatch[1]);
+            }
           }
         }
+        break;
       }
     }
-    // Skip "discounted from" lines since we handle them in the price section
-    else if (line === "discounted from") {
-      continue;
-    }
-    // Handle weight-based items (e.g., "0.64 lbs x $0.98/each")
-    else if (line.match(/[\d\.]+\s+lbs\s+x\s+\$[\d\.]+\/each/)) {
-      // Check if the next line is a direct price
-      if (i + 1 < lines.length && lines[i + 1].trim().match(/^\$[\d\.]+$/)) {
-        // Use the actual price on the next line instead of calculating
-        i++; // Move to the next line
-        const priceMatch = lines[i].match(/\$[\d\.]+/);
-        if (priceMatch && currentItem) {
-          currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
-        }
-      } else {
-        // Calculate price from weight and unit price
-        const weightMatch = line.match(/^([\d\.]+)\s+lbs/);
-        const priceMatch = line.match(/\$([\d\.]+)\/each/);
 
-        if (weightMatch && priceMatch && currentItem) {
-          const weight = parseFloat(weightMatch[1]);
-          const unitPrice = parseFloat(priceMatch[1]);
-          currentItem.price = parseFloat((weight * unitPrice).toFixed(2));
-        }
-      }
+    // Add item if we found both name and price
+    if (productName && paidPrice !== null) {
+      items.push({
+        name: productName,
+        price: paidPrice,
+      });
     }
-    // Handle "X x $Y.ZZ/each" format
-    else if (line.match(/\d+\s+x\s+\$[\d\.]+\/each/)) {
-      // Extract price from this format
-      const priceMatch = line.match(/\$([\d\.]+)\/each/);
-      if (priceMatch && currentItem && currentItem.price === null) {
-        currentItem.price = parseFloat(
-          priceMatch[0].replace("$", "").replace("/each", "")
-        );
-      }
-    }
-    // Check for any line with a price in it as a fallback
-    else if (line.match(/\$[\d\.]+/) && !line.includes("discounted from")) {
-      const priceMatch = line.match(/\$[\d\.]+/);
-      if (priceMatch && !currentItem) {
-        // This might be a lone price with no preceding item name
-        // Check if we can find an item name in a previous line
-        for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
-          const prevLine = lines[j].trim();
-          if (
-            !prevLine.includes("$") &&
-            !prevLine.match(/^\d/) &&
-            !prevLine.includes("SNAP EBT") &&
-            !prevLine.includes("Save to List") &&
-            !prevLine.includes("Add to Cart")
-          ) {
-            currentItem = {
-              name: prevLine,
-              price: parseFloat(priceMatch[0].replace("$", "")),
-            };
-            break;
-          }
-        }
-      } else if (priceMatch && currentItem && currentItem.price === null) {
-        currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
-      }
-    }
-  }
-
-  // Don't forget to add the last item if it exists
-  if (currentItem && currentItem.price !== null) {
-    items.push({
-      name: currentItem.name,
-      price: currentItem.price,
-    });
   }
 
   return items;
