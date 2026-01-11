@@ -95,6 +95,7 @@ export default function GroceryParser({ onParseComplete }: GroceryParserProps) {
           >
             <option value="walmart">Walmart</option>
             <option value="kroger">Kroger</option>
+            <option value="costco">Costco</option>
             <option value="target">Target</option>
           </select>
         </div>
