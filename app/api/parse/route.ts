@@ -5,16 +5,22 @@ import { getCloudflareEnv } from "@/lib/cloudflare-env";
 
 export const runtime = "edge";
 
+// Parsed item type - taxable is optional (undefined means use default behavior)
+interface ParsedItem {
+  name: string;
+  price: number;
+  taxable?: boolean;
+}
+
 // Function to parse grocery list based on source
-function parseGroceryList(
-  text: string,
-  source: string
-): { name: string; price: number }[] {
+function parseGroceryList(text: string, source: string): ParsedItem[] {
   // Different parsing strategies based on store
   if (source === "kroger") {
     return parseKrogerGroceryList(text);
   } else if (source === "walmart") {
     return parseWalmartGroceryList(text);
+  } else if (source === "costco") {
+    return parseCostcoGroceryList(text);
   } else {
     // Generic parser for other stores (Target, etc.)
     return parseGenericGroceryList(text);
@@ -331,6 +337,82 @@ function parseWalmartGroceryList(
   return items;
 }
 
+// Parser for Costco format
+// Format: [optional E] [item_code] [item_name] [price] [Y/N]
+// E prefix = tax-exempt (not taxable), no E = taxable
+// Discount lines: [code] / [parent_item_code] [discount]-
+function parseCostcoGroceryList(text: string): ParsedItem[] {
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  const items: ParsedItem[] = [];
+
+  // Map to track items by their code for applying discounts
+  const itemsByCode: Map<
+    string,
+    { name: string; price: number; taxable: boolean; index: number }
+  > = new Map();
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // Skip footer lines
+    if (
+      trimmedLine.startsWith("SUBTOTAL") ||
+      trimmedLine.startsWith("TAX") ||
+      trimmedLine.startsWith("****") ||
+      trimmedLine.startsWith("TOTAL")
+    ) {
+      continue;
+    }
+
+    // Check if this is a discount line (contains " / " followed by an item code)
+    // Format: 366226    / 1489812    4.00-
+    const discountMatch = trimmedLine.match(/^\d+\s+\/\s+(\d+)\s+([\d.]+)-$/);
+    if (discountMatch) {
+      const parentItemCode = discountMatch[1];
+      const discountAmount = parseFloat(discountMatch[2]);
+
+      // Apply discount to the parent item
+      const parentItem = itemsByCode.get(parentItemCode);
+      if (parentItem) {
+        parentItem.price = parseFloat(
+          (parentItem.price - discountAmount).toFixed(2)
+        );
+        // Update the item in the items array
+        items[parentItem.index].price = parentItem.price;
+      }
+      continue;
+    }
+
+    // Parse regular item line
+    // Format: [optional E] [item_code] [item_name] [price] [Y/N]
+    // E prefix means tax-exempt (not taxable)
+    // Examples:
+    //    1489812    PUMA SOCK    14.99 Y     <- taxable (no E)
+    // E    179571    COKEDEMEXICO    35.49 Y  <- not taxable (has E)
+    // 512599    **KS TOWEL**    20.49 Y       <- taxable (no E)
+    const itemMatch = trimmedLine.match(
+      /^(E\s+)?(\d+)\s+(.+?)\s+([\d.]+)\s+[YN]$/
+    );
+
+    if (itemMatch) {
+      const hasEPrefix = !!itemMatch[1];
+      const itemCode = itemMatch[2];
+      // Clean up item name - remove ** wrapper if present
+      const rawName = itemMatch[3].trim();
+      const name = rawName.replace(/^\*\*(.+)\*\*$/, "$1");
+      const price = parseFloat(itemMatch[4]);
+      // E prefix = tax-exempt (not taxable), no E = taxable
+      const taxable = !hasEPrefix;
+
+      const index = items.length;
+      items.push({ name, price, taxable });
+      itemsByCode.set(itemCode, { name, price, taxable, index });
+    }
+  }
+
+  return items;
+}
+
 // Generic parser for simple "Item $Price" format
 function parseGenericGroceryList(
   text: string
@@ -418,7 +500,9 @@ export async function POST(request: NextRequest) {
     const items: GroceryItem[] = [];
     const uncategorizedItems: UncategorizedItem[] = [];
 
-    for (const { name, price } of parsedItems) {
+    for (const parsedItem of parsedItems) {
+      const { name, price, taxable: parsedTaxable } = parsedItem;
+
       // Check if item exists for this user
       const existingItem = await userDb.getItemByName(name);
 
@@ -450,19 +534,22 @@ export async function POST(request: NextRequest) {
           });
         }
       } else {
+        // For new items, use parsed taxable value if available, otherwise default to false
+        const taxable = parsedTaxable ?? false;
+
         // Create new item without category
         const newItemResult = await userDb.createOrUpdateItem(
           name,
           price,
           source,
           undefined,
-          false
+          taxable
         );
-        
+
         const newItemId = Number(newItemResult.meta.last_row_id);
 
         // Add to receipt items
-        await userDb.addReceiptItem(receiptId, newItemId, price, false);
+        await userDb.addReceiptItem(receiptId, newItemId, price, taxable);
 
         // Add to result
         items.push({
@@ -471,7 +558,7 @@ export async function POST(request: NextRequest) {
           price,
           category_id: null,
           is_new: true,
-          taxable: false,
+          taxable,
         });
 
         // Add to uncategorized
@@ -479,7 +566,7 @@ export async function POST(request: NextRequest) {
           id: newItemId,
           name,
           price,
-          taxable: false,
+          taxable,
         });
       }
     }
