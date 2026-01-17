@@ -103,10 +103,10 @@ export class UserDatabase {
   }
 
   // Receipts
-  async createReceipt(source: string, date?: string) {
+  async createReceipt(source: string, date?: string, originalText?: string) {
     return await this.db
-      .prepare("INSERT INTO receipts (user_id, source, date) VALUES (?, ?, ?)")
-      .bind(this.userId, source, date || new Date().toISOString())
+      .prepare("INSERT INTO receipts (user_id, source, date, original_text) VALUES (?, ?, ?, ?)")
+      .bind(this.userId, source, date || new Date().toISOString(), originalText || null)
       .run();
   }
 

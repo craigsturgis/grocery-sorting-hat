@@ -485,8 +485,8 @@ export async function POST(request: NextRequest) {
 
     const userDb = new UserDatabase(env.DB, user.id);
 
-    // Create a new receipt
-    const receiptResult = await userDb.createReceipt(source);
+    // Create a new receipt with original text for future parser improvements
+    const receiptResult = await userDb.createReceipt(source, undefined, text);
     const receiptId = Number(receiptResult.meta.last_row_id);
 
     // Process each item
