@@ -28,148 +28,141 @@ function parseGroceryList(text: string, source: string): ParsedItem[] {
 }
 
 // Parser for Kroger format
+// New format (2025+):
+//   Save to List
+//   Product Name
+//   Product Name (duplicate)
+//   SNAP EBT
+//   8 oz
+//   $5.49
+//   Add to Cart
+//   Received: 1 Paid:
+//   $5.49
+// Or for discounted items:
+//   $6.49 discounted from $6.99
 function parseKrogerGroceryList(
   text: string
 ): { name: string; price: number }[] {
   const lines = text.split("\n").filter((line) => line.trim() !== "");
   const items: { name: string; price: number }[] = [];
 
-  let currentItem: { name: string; price: number | null } | null = null;
+  // Lines to skip entirely
+  const skipPatterns = [
+    /^Save to List$/,
+    /^SNAP EBT$/,
+    /^Add to Cart$/,
+    /^Featured$/,
+    /^Low Stock$/,
+    /^View Offer$/,
+    /^Buy \d+ For/,
+    /^\d+ For \$[\d.]+$/i, // "2 For $8.00" promotional lines
+    /^Saved, View List$/,
+    /^Everyday Low Price$/,
+    /^Price Cut$/,
+    /^Save \$[\d.]+ each/,
+    /^\d+\.?\d*\s*(oz|fl oz|lbs?|pt|ct|OZ|OZA|g)(\s+\d+\s+Pack)?$/i, // Size lines like "8 oz", "1 pt", "10.300 OZ", "11.2 oz 2 Pack"
+    /^NET WT\s+[\d.]+\s*(oz|OZ|g|lb)/i, // "NET WT 6 OZ (170g)"
+    /^\d+\s+ct\s+\/\s+[\d.]+\s*oz$/i, // "10 ct / 1.65 oz"
+    /^\d+\s+Biscuits\s+\/\s+[\d.]+\s*oz$/i, // "8 Biscuits / 16.3 oz"
+    /^\$[\d.]+\/lb$/, // Price per lb like "$11.99/lb"
+    /^about$/, // "about" line before estimated prices
+    /^each$/i, // standalone "each" line
+    /^\$[\d.]+\s*each\s*$/i, // "$17.51 each"
+    /^\$[\d.]+$/, // Standalone price lines that appear before "Received:" (list prices)
+  ];
 
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0;
+  while (i < lines.length) {
     const line = lines[i].trim();
 
-    // Skip lines that are clearly not product names or prices
-    if (
-      line.includes("SNAP EBT") ||
-      line.includes("Save to List") ||
-      line.includes("Add to Cart") ||
-      line.includes("Featured") ||
-      line.includes("View Offer") ||
-      line.includes("Buy 2 For") ||
-      line.includes("Saved, View List") ||
-      /^\d+ (oz|fl oz|lbs|ct)$/.test(line) ||
-      /^\d+ ct \/ \d+oz$/.test(line)
-    ) {
+    // Skip lines matching skip patterns
+    if (skipPatterns.some((pattern) => pattern.test(line))) {
+      i++;
       continue;
     }
 
-    // Check if this is a product name line (usually ends with ", 1 total" or similar)
-    if (
-      line.match(/,\s+[\d\.]+\s+total$/) ||
-      // Also recognize standalone product names that don't follow the standard pattern
-      (i < lines.length - 1 &&
-        !line.includes("$") &&
-        !line.match(/^\d/) &&
-        !line.includes("discounted from") &&
-        lines[i + 1].includes("$"))
-    ) {
-      // If we have a previous item, add it to our items list
-      if (currentItem && currentItem.price !== null) {
-        items.push({
-          name: currentItem.name,
-          price: currentItem.price,
-        });
+    // Skip empty lines
+    if (!line) {
+      i++;
+      continue;
+    }
+
+    // Check if this looks like a product name line
+    // Product names don't start with $, don't start with "Received:", and aren't pure numbers
+    const isProductName =
+      !line.startsWith("$") &&
+      !line.startsWith("Received:") &&
+      !line.match(/^\d+$/) &&
+      !line.includes("discounted from") &&
+      line.length > 2;
+
+    if (isProductName) {
+      const productName = line.replace(/,\s+[\d.]+\s+total$/, "").trim();
+
+      // Skip duplicate product name on next line
+      if (i + 1 < lines.length && lines[i + 1].trim() === line) {
+        i++;
       }
 
-      // Start a new item, removing the ", X total" suffix if present
-      currentItem = {
-        name: line.replace(/,\s+[\d\.]+\s+total$/, "").trim(),
-        price: null,
-      };
-    }
-    // Check if this is a price line (contains price with $ sign)
-    else if (line.match(/^\$[\d\.]+$/)) {
-      // This is a standalone price line (e.g., "$1.15")
-      const priceMatch = line.match(/\$[\d\.]+/);
-      if (priceMatch && currentItem) {
-        currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
+      // Now scan forward to find the "Received: X Paid:" line and the price after it
+      let price: number | null = null;
+      let j = i + 1;
 
-        // Check if the next line indicates this is a discounted price
-        // If so, skip the "discounted from" and the original price lines
-        if (i + 1 < lines.length && lines[i + 1].trim() === "discounted from") {
-          // Skip the "discounted from" line
-          i++;
-          // Skip the original price line
-          if (
-            i + 1 < lines.length &&
-            lines[i + 1].trim().match(/^\$[\d\.]+$/)
-          ) {
-            i++;
+      while (j < lines.length) {
+        const scanLine = lines[j].trim();
+
+        // Found "Received: X Paid:" - the next line should be the actual price
+        if (scanLine.startsWith("Received:")) {
+          // Check next line for price
+          if (j + 1 < lines.length) {
+            const priceLine = lines[j + 1].trim();
+            // Handle "$X.XX discounted from $Y.YY" format
+            const discountMatch = priceLine.match(
+              /^\$([\d.]+)\s+discounted from\s+\$([\d.]+)$/
+            );
+            if (discountMatch) {
+              price = parseFloat(discountMatch[1]); // Use discounted price
+            } else {
+              // Handle plain "$X.XX" format
+              const priceMatch = priceLine.match(/^\$([\d.]+)$/);
+              if (priceMatch) {
+                price = parseFloat(priceMatch[1]);
+              }
+            }
           }
+          break;
         }
-      }
-    }
-    // Skip "discounted from" lines since we handle them in the price section
-    else if (line === "discounted from") {
-      continue;
-    }
-    // Handle weight-based items (e.g., "0.64 lbs x $0.98/each")
-    else if (line.match(/[\d\.]+\s+lbs\s+x\s+\$[\d\.]+\/each/)) {
-      // Check if the next line is a direct price
-      if (i + 1 < lines.length && lines[i + 1].trim().match(/^\$[\d\.]+$/)) {
-        // Use the actual price on the next line instead of calculating
-        i++; // Move to the next line
-        const priceMatch = lines[i].match(/\$[\d\.]+/);
-        if (priceMatch && currentItem) {
-          currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
-        }
-      } else {
-        // Calculate price from weight and unit price
-        const weightMatch = line.match(/^([\d\.]+)\s+lbs/);
-        const priceMatch = line.match(/\$([\d\.]+)\/each/);
 
-        if (weightMatch && priceMatch && currentItem) {
-          const weight = parseFloat(weightMatch[1]);
-          const unitPrice = parseFloat(priceMatch[1]);
-          currentItem.price = parseFloat((weight * unitPrice).toFixed(2));
-        }
-      }
-    }
-    // Handle "X x $Y.ZZ/each" format
-    else if (line.match(/\d+\s+x\s+\$[\d\.]+\/each/)) {
-      // Extract price from this format
-      const priceMatch = line.match(/\$([\d\.]+)\/each/);
-      if (priceMatch && currentItem && currentItem.price === null) {
-        currentItem.price = parseFloat(
-          priceMatch[0].replace("$", "").replace("/each", "")
-        );
-      }
-    }
-    // Check for any line with a price in it as a fallback
-    else if (line.match(/\$[\d\.]+/) && !line.includes("discounted from")) {
-      const priceMatch = line.match(/\$[\d\.]+/);
-      if (priceMatch && !currentItem) {
-        // This might be a lone price with no preceding item name
-        // Check if we can find an item name in a previous line
-        for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
-          const prevLine = lines[j].trim();
-          if (
-            !prevLine.includes("$") &&
-            !prevLine.match(/^\d/) &&
-            !prevLine.includes("SNAP EBT") &&
-            !prevLine.includes("Save to List") &&
-            !prevLine.includes("Add to Cart")
-          ) {
-            currentItem = {
-              name: prevLine,
-              price: parseFloat(priceMatch[0].replace("$", "")),
-            };
+        // If we hit another product name (no $ and not a skip pattern), stop scanning
+        if (
+          !scanLine.startsWith("$") &&
+          !skipPatterns.some((pattern) => pattern.test(scanLine)) &&
+          scanLine.length > 2 &&
+          !scanLine.startsWith("Received:") &&
+          !scanLine.match(/^\d+$/)
+        ) {
+          // This might be the next product - check if it's not the duplicate
+          if (scanLine !== productName) {
             break;
           }
         }
-      } else if (priceMatch && currentItem && currentItem.price === null) {
-        currentItem.price = parseFloat(priceMatch[0].replace("$", ""));
-      }
-    }
-  }
 
-  // Don't forget to add the last item if it exists
-  if (currentItem && currentItem.price !== null) {
-    items.push({
-      name: currentItem.name,
-      price: currentItem.price,
-    });
+        j++;
+      }
+
+      // If we found a valid price, add the item
+      if (price !== null && price > 0) {
+        items.push({
+          name: productName,
+          price: price,
+        });
+      }
+
+      // Move index past the "Received:" line and price
+      i = j + 2;
+    } else {
+      i++;
+    }
   }
 
   return items;
