@@ -60,7 +60,7 @@ function parseKrogerGroceryList(
     /^Everyday Low Price$/,
     /^Price Cut$/,
     /^Save \$[\d.]+ each/,
-    /^\d+\.?\d*\s*(oz|fl oz|lbs?|pt|ct|OZ|OZA|g)(\s+\d+\s+Pack)?$/i, // Size lines like "8 oz", "1 pt", "10.300 OZ", "11.2 oz 2 Pack"
+    /^\d+\.?\d*\s*(oz|fl oz|lbs?|pt|ct|in|gal|OZ|OZA|g)(\s+\d+\s+Pack)?$/i, // Size lines like "8 oz", "1 pt", "10 in"
     /^NET WT\s+[\d.]+\s*(oz|OZ|g|lb)/i, // "NET WT 6 OZ (170g)"
     /^\d+\s+ct\s+\/\s+[\d.]+\s*oz$/i, // "10 ct / 1.65 oz"
     /^\d+\s+Biscuits\s+\/\s+[\d.]+\s*oz$/i, // "8 Biscuits / 16.3 oz"
@@ -69,6 +69,12 @@ function parseKrogerGroceryList(
     /^each$/i, // standalone "each" line
     /^\$[\d.]+\s*each\s*$/i, // "$17.51 each"
     /^\$[\d.]+$/, // Standalone price lines that appear before "Received:" (list prices)
+    /^Coupon:/i, // "Coupon: Save 33% on All Easter Candy"
+    /^Delivery Only$/i, // "Delivery Only"
+    /^Discounted From\s+\$/i, // "Discounted From  $6.49" (after Received line)
+    /^\$[\d.]+\s+discounted from\s+\$/i, // "$4.99 discounted from $6.49" (list price)
+    /^\$[\d.]+\s+each when you buy/i, // "$1.99 each when you buy 4 or more"
+    /^Save \d+%/i, // "Save 33% on All Easter Candy" (without Coupon: prefix)
   ];
 
   let i = 0;
@@ -93,7 +99,7 @@ function parseKrogerGroceryList(
       !line.startsWith("$") &&
       !line.startsWith("Received:") &&
       !line.match(/^\d+$/) &&
-      !line.includes("discounted from") &&
+      !line.toLowerCase().includes("discounted from") &&
       line.length > 2;
 
     if (isProductName) {

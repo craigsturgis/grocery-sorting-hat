@@ -19,6 +19,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. `npm run deploy` - Deploy to Cloudflare Pages via wrangler
 3. `npm run db:migrate:prod` - Run any new migrations (if schema changed)
 
+**Deploy prerequisites:** Wrangler must be authenticated. Run `npx wrangler login` if not already logged in. The deploy command requires `CLOUDFLARE_ACCOUNT_ID=37c3c2db990595d1b0325164e6965256` to be set (Craig's account), e.g.:
+```
+CLOUDFLARE_ACCOUNT_ID=37c3c2db990595d1b0325164e6965256 npm run deploy
+```
+
 ### Database (Cloudflare D1)
 - `npm run db:migrate` - Run migrations locally
 - `npm run db:migrate:prod` - Run migrations in production
